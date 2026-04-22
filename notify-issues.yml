@@ -1,0 +1,86 @@
+name: Notify Slack on Issue
+
+on:
+  issues:
+    types:
+      - opened
+      - closed
+      - reopened
+
+jobs:
+  notify:
+    name: Send Slack Notification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine issue status label
+        id: status
+        run: |
+          if [[ "${{ github.event.action }}" == "closed" ]]; then
+            echo "label=Closed" >> "$GITHUB_OUTPUT"
+            echo "emoji=🔴" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event.action }}" == "reopened" ]]; then
+            echo "label=Reopened" >> "$GITHUB_OUTPUT"
+            echo "emoji=🔄" >> "$GITHUB_OUTPUT"
+          else
+            echo "label=Opened" >> "$GITHUB_OUTPUT"
+            echo "emoji=🟢" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@v3
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "${{ steps.status.outputs.emoji }} Issue ${{ steps.status.outputs.label }}: ${{ github.event.issue.title }}",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository:*\n<https://github.com/${{ github.repository }}|${{ github.repository }}>"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Issue Number:*\n<${{ github.event.issue.html_url }}|#${{ github.event.issue.number }}>"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Reported by:*\n${{ github.actor }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Status:*\n${{ steps.status.outputs.label }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": { "type": "plain_text", "text": "View Issue", "emoji": true },
+                      "url": "${{ github.event.issue.html_url }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "Triggered by *${{ github.actor }}* • ${{ github.repository }}"
+                    }
+                  ]
+                }
+              ]
+            }

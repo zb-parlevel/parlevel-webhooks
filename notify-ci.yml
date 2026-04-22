@@ -1,0 +1,91 @@
+name: Notify Slack on CI Status
+
+on:
+  workflow_run:
+    # Replace "CI" with the exact `name:` field of your CI workflow
+    workflows:
+      - "CI"
+    types:
+      - completed
+
+jobs:
+  notify:
+    name: Send Slack Notification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine CI result label
+        id: result
+        run: |
+          CONCLUSION="${{ github.event.workflow_run.conclusion }}"
+          if [[ "$CONCLUSION" == "success" ]]; then
+            echo "label=Passed" >> "$GITHUB_OUTPUT"
+            echo "emoji=✅" >> "$GITHUB_OUTPUT"
+          elif [[ "$CONCLUSION" == "failure" ]]; then
+            echo "label=Failed" >> "$GITHUB_OUTPUT"
+            echo "emoji=❌" >> "$GITHUB_OUTPUT"
+          elif [[ "$CONCLUSION" == "cancelled" ]]; then
+            echo "label=Cancelled" >> "$GITHUB_OUTPUT"
+            echo "emoji=⚪" >> "$GITHUB_OUTPUT"
+          else
+            echo "label=$CONCLUSION" >> "$GITHUB_OUTPUT"
+            echo "emoji=🔶" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@v3
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "${{ steps.result.outputs.emoji }} CI ${{ steps.result.outputs.label }}: ${{ github.event.workflow_run.name }}",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository:*\n<https://github.com/${{ github.repository }}|${{ github.repository }}>"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:*\n`${{ github.event.workflow_run.head_branch }}`"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Triggered by:*\n${{ github.event.workflow_run.triggering_actor.login }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Conclusion:*\n${{ steps.result.outputs.emoji }} ${{ steps.result.outputs.label }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": { "type": "plain_text", "text": "View Run", "emoji": true },
+                      "url": "${{ github.event.workflow_run.html_url }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "Commit: `${{ github.event.workflow_run.head_sha }}`  •  ${{ github.repository }}"
+                    }
+                  ]
+                }
+              ]
+            }

@@ -1,0 +1,81 @@
+name: Notify Slack on Release
+
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  notify:
+    name: Send Slack Notification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine release type label
+        id: release_type
+        run: |
+          if [[ "${{ github.event.release.prerelease }}" == "true" ]]; then
+            echo "label=Pre-release" >> "$GITHUB_OUTPUT"
+            echo "emoji=🔶" >> "$GITHUB_OUTPUT"
+          else
+            echo "label=Release" >> "$GITHUB_OUTPUT"
+            echo "emoji=🚀" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@v3
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "${{ steps.release_type.outputs.emoji }} ${{ steps.release_type.outputs.label }} Published: ${{ github.event.release.tag_name }}",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository:*\n<https://github.com/${{ github.repository }}|${{ github.repository }}>"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Tag:*\n`${{ github.event.release.tag_name }}`"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Release Name:*\n${{ github.event.release.name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Type:*\n${{ steps.release_type.outputs.label }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": { "type": "plain_text", "text": "View Release", "emoji": true },
+                      "url": "${{ github.event.release.html_url }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "Published by *${{ github.actor }}* • ${{ github.repository }}"
+                    }
+                  ]
+                }
+              ]
+            }

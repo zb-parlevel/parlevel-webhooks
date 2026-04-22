@@ -1,0 +1,91 @@
+name: Notify Slack on Pull Request
+
+on:
+  pull_request:
+    types:
+      - opened
+      - closed
+      - reopened
+
+jobs:
+  notify:
+    name: Send Slack Notification
+    # Skip draft PRs
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine PR status label
+        id: status
+        run: |
+          if [[ "${{ github.event.action }}" == "closed" && "${{ github.event.pull_request.merged }}" == "true" ]]; then
+            echo "label=Merged" >> "$GITHUB_OUTPUT"
+            echo "emoji=🟣" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event.action }}" == "closed" ]]; then
+            echo "label=Closed" >> "$GITHUB_OUTPUT"
+            echo "emoji=🔴" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.event.action }}" == "reopened" ]]; then
+            echo "label=Reopened" >> "$GITHUB_OUTPUT"
+            echo "emoji=🔄" >> "$GITHUB_OUTPUT"
+          else
+            echo "label=Opened" >> "$GITHUB_OUTPUT"
+            echo "emoji=🟢" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Send Slack notification
+        uses: slackapi/slack-github-action@v3
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "${{ steps.status.outputs.emoji }} PR ${{ steps.status.outputs.label }}: ${{ github.event.pull_request.title }}",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository:*\n<https://github.com/${{ github.repository }}|${{ github.repository }}>"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*PR Number:*\n<${{ github.event.pull_request.html_url }}|#${{ github.event.pull_request.number }}>"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Author:*\n${{ github.actor }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:*\n`${{ github.head_ref }}` → `${{ github.base_ref }}`"
+                    }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": { "type": "plain_text", "text": "View Pull Request", "emoji": true },
+                      "url": "${{ github.event.pull_request.html_url }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "context",
+                  "elements": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "Triggered by *${{ github.actor }}* • ${{ github.repository }}"
+                    }
+                  ]
+                }
+              ]
+            }
